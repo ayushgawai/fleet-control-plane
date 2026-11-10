@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: fleet, POSTGRES_PASSWORD: fleet, POSTGRES_DB: fleet}
+    ports: ["5432:5432"]
+    volumes: ["./migrations:/docker-entrypoint-initdb.d:ro"]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  redpanda: # Kafka API
+    image: redpandadata/redpanda:v24.2.4
+    command: redpanda start --smp 1 --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092 --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092"]
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.5.0
+    command: -jar DynamoDBLocal.jar -sharedDb -inMemory
+    ports: ["8000:8000"]
+  localstack: # SQS only
+    image: localstack/localstack:3.8
+    environment: {SERVICES: sqs}
+    ports: ["4566:4566"]
+  api:
+    build: .
+    environment: {ADDR: ":8080"}
+    ports: ["8080:8080"]
+    depends_on: [postgres, redis, redpanda, dynamodb-local, localstack]

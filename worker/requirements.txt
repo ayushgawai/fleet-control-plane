@@ -1,0 +1,4 @@
+# Optional, only for the real Kafka/YOLO path. Tests need neither.
+kafka-python>=2.0
+ultralytics>=8.0
+opencv-python>=4.8

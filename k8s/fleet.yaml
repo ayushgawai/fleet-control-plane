@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: fleet-api}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: fleet-api}}
+  template:
+    metadata:
+      labels: {app: fleet-api}
+      annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8080", prometheus.io/path: /metrics}
+    spec:
+      containers:
+      - name: api
+        image: fleet-api:latest
+        ports: [{containerPort: 8080}]
+        readinessProbe: {httpGet: {path: /healthz, port: 8080}, initialDelaySeconds: 2}
+        livenessProbe: {httpGet: {path: /healthz, port: 8080}, initialDelaySeconds: 5}
+        resources: {requests: {cpu: 250m, memory: 256Mi}, limits: {cpu: "1", memory: 512Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: fleet-api}
+spec: {selector: {app: fleet-api}, ports: [{port: 80, targetPort: 8080}]}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: fleet-api}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: fleet-api}
+  minReplicas: 2
+  maxReplicas: 10
+  metrics: [{type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: fleet-worker}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: fleet-worker}}
+  template:
+    metadata: {labels: {app: fleet-worker}}
+    spec:
+      containers:
+      - name: worker
+        image: fleet-worker:latest
+        command: ["python", "worker.py"]
+        env: [{name: KAFKA_BOOTSTRAP, value: "redpanda:9092"}]
+        readinessProbe: {exec: {command: ["test", "-f", "/tmp/ready"]}, initialDelaySeconds: 5}
+        livenessProbe: {exec: {command: ["test", "-f", "/tmp/ready"]}, initialDelaySeconds: 60, periodSeconds: 30}
+        resources: {requests: {cpu: 500m, memory: 512Mi}, limits: {cpu: "2", memory: 2Gi}}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: fleet-worker}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: fleet-worker}
+  minReplicas: 2
+  maxReplicas: 20
+  metrics: [{type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}]

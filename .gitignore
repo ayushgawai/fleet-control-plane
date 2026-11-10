@@ -1,0 +1,9 @@
+/api
+/fleetload
+*.tfstate*
+.terraform/
+__pycache__/
+.pytest_cache/
+.DS_Store
+yolov8n.pt
+.venv/
