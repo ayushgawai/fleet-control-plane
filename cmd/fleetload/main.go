@@ -104,8 +104,7 @@ func main() {
 				if _, err := s.Report(c.DeviceID, c.Config, c.Version); err != nil {
 					panic(err)
 				}
-				first := !q.Acked(c.ID)
-				q.Ack(c.ID)
+				first := q.Ack(c.ID)
 				q.Ack(c.ID) // duplicate ack injected
 				if first {
 					d := time.Since(c.SentAt)

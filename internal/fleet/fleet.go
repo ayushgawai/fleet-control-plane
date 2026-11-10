@@ -213,27 +213,32 @@ func (q *Queue) Send(c Command) {
 	}
 	q.pending = append(q.pending, c)
 }
+
+// Receive skips entries acked while queued (duplicates), so Ack stays O(1).
 func (q *Queue) Receive() (Command, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if len(q.pending) == 0 {
-		return Command{}, false
+	for len(q.pending) > 0 {
+		c := q.pending[0]
+		q.pending = q.pending[1:]
+		if q.acked[c.ID] {
+			continue
+		}
+		c.Attempts++
+		return c, true
 	}
-	c := q.pending[0]
-	q.pending = q.pending[1:]
-	c.Attempts++
-	return c, true
+	return Command{}, false
 }
-func (q *Queue) Ack(id string) { // idempotent
+
+// Ack is idempotent; it reports whether this call was the first ack.
+func (q *Queue) Ack(id string) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.acked[id] = true
-	for i, c := range q.pending {
-		if c.ID == id {
-			q.pending = append(q.pending[:i], q.pending[i+1:]...)
-			break
-		}
+	if q.acked[id] {
+		return false
 	}
+	q.acked[id] = true
+	return true
 }
 func (q *Queue) Fail(c Command) { // retry or dead-letter
 	q.mu.Lock()
@@ -252,5 +257,17 @@ func (q *Queue) Acked(id string) bool {
 	defer q.mu.Unlock()
 	return q.acked[id]
 }
-func (q *Queue) Len() int { q.mu.Lock(); defer q.mu.Unlock(); return len(q.pending) }
+
+// ponytail: O(n) scan over pending, keep a live counter if /metrics scrapes get slow.
+func (q *Queue) Len() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	n := 0
+	for _, c := range q.pending {
+		if !q.acked[c.ID] {
+			n++
+		}
+	}
+	return n
+}
 func (q *Queue) DLQLen() int { q.mu.Lock(); defer q.mu.Unlock(); return len(q.DLQ) }

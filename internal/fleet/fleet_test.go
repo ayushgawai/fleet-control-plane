@@ -59,10 +59,15 @@ func TestQueueRetryDLQAndIdempotentAck(t *testing.T) {
 		t.Fatalf("expected DLQ after max attempts, got %d", len(q.DLQ))
 	}
 	q.Send(Command{ID: "c2", DeviceID: "cam1"})
-	q.Ack("c2")
-	q.Ack("c2") // duplicate ack: no panic, still acked
+	q.Send(Command{ID: "c2", DeviceID: "cam1"}) // duplicate delivery
+	if !q.Ack("c2") || q.Ack("c2") {
+		t.Fatal("first ack must report true, duplicate false")
+	}
 	if !q.Acked("c2") || q.Len() != 0 {
 		t.Fatal("idempotent ack failed")
+	}
+	if _, ok := q.Receive(); ok {
+		t.Fatal("acked duplicates must not be redelivered")
 	}
 }
 

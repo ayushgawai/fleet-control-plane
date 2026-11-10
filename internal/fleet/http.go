@@ -44,7 +44,9 @@ func write(w http.ResponseWriter, code int, v any) {
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(v)
 }
-func errw(w http.ResponseWriter, code int, e error) { write(w, code, map[string]string{"error": e.Error()}) }
+func errw(w http.ResponseWriter, code int, e error) {
+	write(w, code, map[string]string{"error": e.Error()})
+}
 
 func (a *API) limited(w http.ResponseWriter, keys ...string) bool {
 	for _, key := range keys {
